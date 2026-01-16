@@ -8,6 +8,7 @@ from agent_db.metadata.models import (
     CorrelationInsight,
     QueryPattern,
 )
+from agent_db.metadata.store import MetadataStore
 
 __all__ = [
     "DataProfile",
@@ -16,4 +17,5 @@ __all__ = [
     "DistributionType",
     "CorrelationInsight",
     "QueryPattern",
+    "MetadataStore",
 ]
