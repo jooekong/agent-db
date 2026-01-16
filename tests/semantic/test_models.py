@@ -9,6 +9,10 @@ from agent_db.semantic.models import (
     SemanticType,
     AttributeSemanticType,
     EnumValue,
+    CrossDatabaseMapping,
+    DataSource,
+    QueryRouting,
+    DatabaseRole,
 )
 
 
@@ -76,3 +80,38 @@ class TestAttribute:
         )
         assert len(attr.enum_values) == 2
         assert attr.enum_values[0].value == "free"
+
+
+class TestCrossDatabaseMapping:
+    def test_mapping_basic(self):
+        sources = [
+            DataSource(
+                database="postgresql",
+                entity="user",
+                role=DatabaseRole.MASTER,
+            ),
+            DataSource(
+                database="qdrant",
+                collection="user_behavior_vectors",
+                role=DatabaseRole.ENRICHMENT,
+                provides=["User behavior vectors for similarity search"],
+            ),
+        ]
+        mapping = CrossDatabaseMapping(
+            name="user_unified_view",
+            sources=sources,
+        )
+        assert mapping.name == "user_unified_view"
+        assert len(mapping.sources) == 2
+
+    def test_mapping_with_routing(self):
+        routing = [
+            QueryRouting(pattern="similar users", prefer="qdrant"),
+            QueryRouting(pattern="user relationships", prefer="neo4j"),
+        ]
+        mapping = CrossDatabaseMapping(
+            name="user_unified_view",
+            sources=[],
+            query_routing=routing,
+        )
+        assert len(mapping.query_routing) == 2

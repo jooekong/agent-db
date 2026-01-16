@@ -8,6 +8,10 @@ from agent_db.semantic.models import (
     SemanticType,
     AttributeSemanticType,
     EnumValue,
+    CrossDatabaseMapping,
+    DataSource,
+    QueryRouting,
+    DatabaseRole,
 )
 
 __all__ = [
@@ -18,4 +22,8 @@ __all__ = [
     "SemanticType",
     "AttributeSemanticType",
     "EnumValue",
+    "CrossDatabaseMapping",
+    "DataSource",
+    "QueryRouting",
+    "DatabaseRole",
 ]
