@@ -1,0 +1,41 @@
+entities:
+  - name: user
+    table: users
+    description: "System users including paid and free"
+    semantic_type: actor
+    lifecycle:
+      created: created_at
+      updated: updated_at
+      deleted: deleted_at
+    states:
+      - name: active
+        condition: "last_login_at > NOW() - INTERVAL '30d'"
+      - name: dormant
+        condition: "last_login_at < NOW() - INTERVAL '30d'"
+    attributes:
+      - column: subscription_tier
+        semantic_type: dimension
+        enum_values:
+          - value: free
+            meaning: "Free user with feature limits"
+            business_priority: low
+          - value: pro
+            meaning: "Paid user with full access"
+            business_priority: high
+
+cross_database_mappings:
+  - name: user_unified_view
+    sources:
+      - database: postgresql
+        entity: user
+        role: master
+      - database: qdrant
+        collection: user_behavior_vectors
+        role: enrichment
+        provides:
+          - "User behavior vectors for similarity search"
+    query_routing:
+      - pattern: "similar users"
+        prefer: qdrant
+      - pattern: "statistics|count|amount"
+        prefer: postgresql

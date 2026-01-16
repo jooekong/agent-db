@@ -13,6 +13,7 @@ from agent_db.semantic.models import (
     QueryRouting,
     DatabaseRole,
 )
+from agent_db.semantic.loader import SchemaLoader, SemanticSchema
 
 __all__ = [
     "Entity",
@@ -26,4 +27,6 @@ __all__ = [
     "DataSource",
     "QueryRouting",
     "DatabaseRole",
+    "SchemaLoader",
+    "SemanticSchema",
 ]
