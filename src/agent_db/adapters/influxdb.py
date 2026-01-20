@@ -10,8 +10,10 @@ from agent_db.adapters.protocol import (
     DatabaseType,
     QueryResult,
 )
+from agent_db.adapters.factory import register_adapter
 
 
+@register_adapter(DatabaseType.INFLUXDB)
 class InfluxDBAdapter(DatabaseAdapter):
     """Adapter for InfluxDB time series database."""
 
@@ -25,12 +27,22 @@ class InfluxDBAdapter(DatabaseAdapter):
 
     async def connect(self) -> None:
         """Connect to InfluxDB."""
-        port = self.config.port or 8086
-        url = f"http://{self.config.host}:{port}"
-        token = self.config.extra.get("token", "")
+        scheme = "https" if self.config.ssl.enabled else "http"
+        url = f"{scheme}://{self.config.host}:{self.config.effective_port}"
+        token = self.config.get_password() or self.config.extra.get("token", "")
         org = self.config.extra.get("org", "")
 
-        self._client = InfluxDBClient(url=url, token=token, org=org)
+        ssl_ca_cert = self.config.ssl.ca_cert if self.config.ssl.enabled else None
+        verify_ssl = self.config.ssl.verify if self.config.ssl.enabled else True
+
+        self._client = InfluxDBClient(
+            url=url,
+            token=token,
+            org=org,
+            timeout=self.config.pool.connect_timeout * 1000,  # ms
+            ssl_ca_cert=ssl_ca_cert,
+            verify_ssl=verify_ssl,
+        )
 
     async def disconnect(self) -> None:
         """Disconnect from InfluxDB."""

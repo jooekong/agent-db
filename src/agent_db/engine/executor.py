@@ -71,10 +71,11 @@ class QueryExecutor:
                         step, result.step_results, step_by_id
                     )
                     result.identity_results[step.step_id] = identity_result
-                    completed.add(step.step_id)
                 except Exception as e:
                     result.errors[step.step_id] = str(e)
                     result.success = False
+                # Always mark as completed to maintain dependency tracking
+                completed.add(step.step_id)
                 pending.remove(step)
 
             # Execute query steps in parallel

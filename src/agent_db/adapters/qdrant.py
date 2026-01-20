@@ -10,8 +10,10 @@ from agent_db.adapters.protocol import (
     DatabaseType,
     QueryResult,
 )
+from agent_db.adapters.factory import register_adapter
 
 
+@register_adapter(DatabaseType.QDRANT)
 class QdrantAdapter(DatabaseAdapter):
     """Adapter for Qdrant vector database."""
 
@@ -25,10 +27,15 @@ class QdrantAdapter(DatabaseAdapter):
 
     async def connect(self) -> None:
         """Connect to Qdrant."""
-        port = self.config.port or 6333
+        https = self.config.ssl.enabled
+        api_key = self.config.get_password() if self.config.user == "api_key" else None
+
         self._client = QdrantClient(
             host=self.config.host,
-            port=port,
+            port=self.config.effective_port,
+            https=https,
+            api_key=api_key,
+            timeout=self.config.pool.connect_timeout,
             **self.config.extra,
         )
 

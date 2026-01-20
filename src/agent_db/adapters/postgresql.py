@@ -10,8 +10,10 @@ from agent_db.adapters.protocol import (
     DatabaseType,
     QueryResult,
 )
+from agent_db.adapters.factory import register_adapter
 
 
+@register_adapter(DatabaseType.POSTGRESQL)
 class PostgreSQLAdapter(DatabaseAdapter):
     """Adapter for PostgreSQL databases."""
 
@@ -26,16 +28,42 @@ class PostgreSQLAdapter(DatabaseAdapter):
     def _build_dsn(self) -> str:
         """Build connection DSN."""
         user = self.config.user or ""
-        password = self.config.password or ""
+        password = self.config.get_password() or ""
         auth = f"{user}:{password}@" if user else ""
-        port = self.config.port or 5432
         database = self.config.database or "postgres"
-        return f"postgresql://{auth}{self.config.host}:{port}/{database}"
+        return f"postgresql://{auth}{self.config.host}:{self.config.effective_port}/{database}"
+
+    def _build_ssl_context(self) -> Optional[Any]:
+        """Build SSL context if configured."""
+        if not self.config.ssl.enabled:
+            return None
+        import ssl
+        ctx = ssl.create_default_context()
+        if self.config.ssl.ca_cert:
+            ctx.load_verify_locations(self.config.ssl.ca_cert)
+        if self.config.ssl.client_cert and self.config.ssl.client_key:
+            ctx.load_cert_chain(self.config.ssl.client_cert, self.config.ssl.client_key)
+        if not self.config.ssl.verify:
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+        return ctx
 
     async def connect(self) -> None:
         """Create connection pool."""
         dsn = self._build_dsn()
-        self._pool = await asyncpg.create_pool(dsn, **self.config.extra)
+        ssl_ctx = self._build_ssl_context()
+        pool_config = self.config.pool
+
+        self._pool = await asyncpg.create_pool(
+            dsn,
+            min_size=pool_config.min_size,
+            max_size=pool_config.max_size,
+            max_inactive_connection_lifetime=pool_config.max_idle_time,
+            timeout=pool_config.connect_timeout,
+            command_timeout=pool_config.command_timeout,
+            ssl=ssl_ctx,
+            **self.config.extra,
+        )
 
     async def disconnect(self) -> None:
         """Close connection pool."""

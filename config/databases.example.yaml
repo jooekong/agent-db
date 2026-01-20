@@ -1,0 +1,83 @@
+# Example database configuration
+# Copy to databases.yaml and customize for your environment
+
+databases:
+  # PostgreSQL - primary relational database
+  postgresql:
+    database_type: postgresql
+    host: localhost
+    port: 5432
+    database: myapp
+    user: postgres
+    password: secret
+    pool:
+      min_size: 2
+      max_size: 20
+      connect_timeout: 10
+    ssl:
+      enabled: false
+
+  # MySQL - secondary relational database
+  mysql:
+    database_type: mysql
+    host: localhost
+    port: 3306
+    database: myapp
+    user: root
+    password: secret
+    pool:
+      min_size: 2
+      max_size: 20
+
+  # Qdrant - vector database for embeddings
+  qdrant:
+    database_type: qdrant
+    host: localhost
+    port: 6333
+    # For API key auth:
+    # user: api_key
+    # password: your_api_key
+    ssl:
+      enabled: false
+
+  # Milvus - vector database for ML workloads
+  milvus:
+    database_type: milvus
+    host: localhost
+    port: 19530
+    database: default
+    # user: root
+    # password: Milvus
+    ssl:
+      enabled: false
+
+  # Neo4j - graph database for relationships
+  neo4j:
+    database_type: neo4j
+    host: localhost
+    port: 7687
+    database: neo4j
+    user: neo4j
+    password: password
+    pool:
+      max_size: 50
+
+  # Nebula Graph - distributed graph database
+  nebula:
+    database_type: nebula
+    host: localhost
+    port: 9669
+    database: myspace
+    user: root
+    password: nebula
+    pool:
+      max_size: 30
+
+  # InfluxDB - time series database
+  influxdb:
+    database_type: influxdb
+    host: localhost
+    port: 8086
+    password: your_token  # InfluxDB uses token for auth
+    extra:
+      org: myorg

@@ -326,10 +326,58 @@ class InfluxDBSampler(BaseSampler):
         return None
 
 
+class MySQLSampler(BaseSampler):
+    """Sampler for MySQL databases."""
+
+    async def get_row_count(self, table: str) -> int:
+        """Get total row count."""
+        result = await self.adapter.execute(f"SELECT COUNT(*) FROM `{table}`")
+        return int(result.rows[0][0]) if result.rows else 0
+
+    async def get_column_info(self, table: str) -> list[dict[str, Any]]:
+        """Get column metadata."""
+        query = f"""
+        SELECT column_name, data_type, is_nullable
+        FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = '{table}'
+        ORDER BY ordinal_position
+        """
+        result = await self.adapter.execute(query)
+        columns = []
+        for row in result.rows:
+            columns.append({
+                "name": row[0],
+                "data_type": row[1],
+                "nullable": row[2] == "YES",
+            })
+        return columns
+
+    async def sample_table(
+        self, table: str, sample_size: int = 10000
+    ) -> QueryResult:
+        """Sample rows using ORDER BY RAND()."""
+        row_count = await self.get_row_count(table)
+
+        if row_count == 0:
+            return QueryResult(columns=[], rows=[], row_count=0)
+
+        query = f"SELECT * FROM `{table}` ORDER BY RAND() LIMIT {sample_size}"
+        return await self.adapter.execute(query)
+
+    async def sample_column(
+        self, table: str, column: str, sample_size: int = 10000
+    ) -> list[Any]:
+        """Sample values from a specific column."""
+        query = f"SELECT `{column}` FROM `{table}` ORDER BY RAND() LIMIT {sample_size}"
+        result = await self.adapter.execute(query)
+        return [row[0] for row in result.rows]
+
+
 def get_sampler(adapter: DatabaseAdapter, **kwargs: Any) -> BaseSampler:
     """Factory function to get appropriate sampler for adapter."""
     samplers = {
         DatabaseType.POSTGRESQL: PostgreSQLSampler,
+        DatabaseType.MYSQL: MySQLSampler,
         DatabaseType.NEO4J: Neo4jSampler,
         DatabaseType.INFLUXDB: InfluxDBSampler,
     }

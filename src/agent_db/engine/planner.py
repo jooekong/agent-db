@@ -22,13 +22,13 @@ class QueryStep(BaseModel):
 
     step_id: int
     database: str
-    query: str
+    query: str = ""  # Empty for RESOLVE_IDENTITY steps
     description: str
     depends_on: list[int] = Field(default_factory=list)
     step_type: StepType = StepType.QUERY
-    mapping_name: Optional[str] = None
-    input_from: Optional[int] = None
-    input_key: Optional[str] = None
+    mapping_name: Optional[str] = None  # For RESOLVE_IDENTITY: cross-db mapping name
+    input_from: Optional[int] = None  # For RESOLVE_IDENTITY: step to get IDs from
+    input_key: Optional[str] = None  # For RESOLVE_IDENTITY: key column name
 
 
 class QueryPlan(BaseModel):

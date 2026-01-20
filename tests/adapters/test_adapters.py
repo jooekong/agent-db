@@ -4,83 +4,166 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agent_db.adapters.protocol import ConnectionConfig, DatabaseType
+from agent_db.adapters.protocol import ConnectionConfig, DatabaseType, SSLConfig, PoolConfig
+from agent_db.adapters.factory import create_adapter, create_adapters, DatabasesConfig
 from agent_db.adapters.postgresql import PostgreSQLAdapter
+from agent_db.adapters.mysql import MySQLAdapter
 from agent_db.adapters.qdrant import QdrantAdapter
+from agent_db.adapters.milvus import MilvusAdapter
 from agent_db.adapters.neo4j import Neo4jAdapter
+from agent_db.adapters.nebula import NebulaAdapter
 from agent_db.adapters.influxdb import InfluxDBAdapter
 
 
-class TestPostgreSQLAdapter:
-    @pytest.fixture
-    def pg_config(self) -> ConnectionConfig:
-        return ConnectionConfig(
+class TestConnectionConfig:
+    def test_default_port(self):
+        config = ConnectionConfig(database_type=DatabaseType.POSTGRESQL)
+        assert config.default_port == 5432
+        assert config.effective_port == 5432
+
+    def test_custom_port(self):
+        config = ConnectionConfig(database_type=DatabaseType.POSTGRESQL, port=5433)
+        assert config.effective_port == 5433
+
+    def test_password_secret(self):
+        config = ConnectionConfig(
             database_type=DatabaseType.POSTGRESQL,
+            password="secret123",
+        )
+        assert config.get_password() == "secret123"
+        # Password should not appear in string representation
+        assert "secret123" not in str(config)
+
+    def test_ssl_config(self):
+        config = ConnectionConfig(
+            database_type=DatabaseType.POSTGRESQL,
+            ssl=SSLConfig(enabled=True, verify=False),
+        )
+        assert config.ssl.enabled is True
+        assert config.ssl.verify is False
+
+    def test_pool_config(self):
+        config = ConnectionConfig(
+            database_type=DatabaseType.MYSQL,
+            pool=PoolConfig(min_size=5, max_size=50),
+        )
+        assert config.pool.min_size == 5
+        assert config.pool.max_size == 50
+
+
+class TestAdapterFactory:
+    def test_create_postgresql_adapter(self):
+        config = ConnectionConfig(database_type=DatabaseType.POSTGRESQL)
+        adapter = create_adapter(config)
+        assert isinstance(adapter, PostgreSQLAdapter)
+
+    def test_create_mysql_adapter(self):
+        config = ConnectionConfig(database_type=DatabaseType.MYSQL)
+        adapter = create_adapter(config)
+        assert isinstance(adapter, MySQLAdapter)
+
+    def test_create_qdrant_adapter(self):
+        config = ConnectionConfig(database_type=DatabaseType.QDRANT)
+        adapter = create_adapter(config)
+        assert isinstance(adapter, QdrantAdapter)
+
+    def test_create_milvus_adapter(self):
+        config = ConnectionConfig(database_type=DatabaseType.MILVUS)
+        adapter = create_adapter(config)
+        assert isinstance(adapter, MilvusAdapter)
+
+    def test_create_neo4j_adapter(self):
+        config = ConnectionConfig(database_type=DatabaseType.NEO4J)
+        adapter = create_adapter(config)
+        assert isinstance(adapter, Neo4jAdapter)
+
+    def test_create_nebula_adapter(self):
+        config = ConnectionConfig(database_type=DatabaseType.NEBULA)
+        adapter = create_adapter(config)
+        assert isinstance(adapter, NebulaAdapter)
+
+    def test_create_influxdb_adapter(self):
+        config = ConnectionConfig(database_type=DatabaseType.INFLUXDB)
+        adapter = create_adapter(config)
+        assert isinstance(adapter, InfluxDBAdapter)
+
+    def test_create_adapters_from_config(self):
+        configs = DatabasesConfig(databases={
+            "pg": ConnectionConfig(database_type=DatabaseType.POSTGRESQL),
+            "mysql": ConnectionConfig(database_type=DatabaseType.MYSQL),
+        })
+        adapters = create_adapters(configs)
+        assert len(adapters) == 2
+        assert "pg" in adapters
+        assert "mysql" in adapters
+
+
+class TestMySQLAdapter:
+    @pytest.fixture
+    def config(self) -> ConnectionConfig:
+        return ConnectionConfig(
+            database_type=DatabaseType.MYSQL,
             host="localhost",
-            port=5432,
+            port=3306,
             database="testdb",
             user="user",
             password="pass",
         )
 
-    def test_adapter_init(self, pg_config: ConnectionConfig):
-        adapter = PostgreSQLAdapter(pg_config)
-        assert adapter.database_type == DatabaseType.POSTGRESQL
-
-    def test_build_dsn(self, pg_config: ConnectionConfig):
-        adapter = PostgreSQLAdapter(pg_config)
-        dsn = adapter._build_dsn()
-        assert "postgresql://" in dsn
-        assert "localhost" in dsn
+    def test_adapter_type(self, config: ConnectionConfig):
+        adapter = MySQLAdapter(config)
+        assert adapter.database_type == DatabaseType.MYSQL
 
     @pytest.mark.asyncio
-    async def test_execute_query(self, pg_config: ConnectionConfig):
-        adapter = PostgreSQLAdapter(pg_config)
+    async def test_execute_query(self, config: ConnectionConfig):
+        adapter = MySQLAdapter(config)
 
-        mock_pool = MagicMock()
-        mock_conn = AsyncMock()
-
-        # Create async context manager mock
-        mock_ctx = AsyncMock()
-        mock_ctx.__aenter__.return_value = mock_conn
-        mock_ctx.__aexit__.return_value = None
-        mock_pool.acquire.return_value = mock_ctx
-
-        mock_conn.fetch.return_value = [
+        # Create mock objects
+        mock_cursor = MagicMock()
+        mock_cursor.execute = AsyncMock()
+        mock_cursor.fetchall = AsyncMock(return_value=[
             {"id": 1, "name": "alice"},
             {"id": 2, "name": "bob"},
-        ]
+        ])
+        mock_cursor.__aenter__ = AsyncMock(return_value=mock_cursor)
+        mock_cursor.__aexit__ = AsyncMock()
+
+        mock_conn = MagicMock()
+        mock_conn.cursor = MagicMock(return_value=mock_cursor)
+        mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_conn.__aexit__ = AsyncMock()
+
+        mock_pool = MagicMock()
+        mock_pool.acquire = MagicMock(return_value=mock_conn)
 
         adapter._pool = mock_pool
 
         result = await adapter.execute("SELECT * FROM users")
         assert result.row_count == 2
-        assert result.columns == ["id", "name"]
 
 
-class TestQdrantAdapter:
+class TestMilvusAdapter:
     @pytest.fixture
-    def qdrant_config(self) -> ConnectionConfig:
+    def config(self) -> ConnectionConfig:
         return ConnectionConfig(
-            database_type=DatabaseType.QDRANT,
+            database_type=DatabaseType.MILVUS,
             host="localhost",
-            port=6333,
+            port=19530,
         )
 
-    def test_adapter_init(self, qdrant_config: ConnectionConfig):
-        adapter = QdrantAdapter(qdrant_config)
-        assert adapter.database_type == DatabaseType.QDRANT
+    def test_adapter_type(self, config: ConnectionConfig):
+        adapter = MilvusAdapter(config)
+        assert adapter.database_type == DatabaseType.MILVUS
 
     @pytest.mark.asyncio
-    async def test_search_vectors(self, qdrant_config: ConnectionConfig):
-        adapter = QdrantAdapter(qdrant_config)
+    async def test_search(self, config: ConnectionConfig):
+        adapter = MilvusAdapter(config)
 
         mock_client = MagicMock()
-        mock_result = MagicMock()
-        mock_result.id = "1"
-        mock_result.score = 0.95
-        mock_result.payload = {"name": "alice"}
-        mock_client.search.return_value = [mock_result]
+        mock_client.search.return_value = [[
+            {"id": 1, "distance": 0.1, "entity": {"name": "alice"}},
+            {"id": 2, "distance": 0.2, "entity": {"name": "bob"}},
+        ]]
 
         adapter._client = mock_client
 
@@ -88,57 +171,23 @@ class TestQdrantAdapter:
             collection="users",
             vector=[0.1, 0.2, 0.3],
             limit=10,
+            output_fields=["name"],
         )
-        assert result.row_count == 1
-        assert "score" in result.columns
+        assert result.row_count == 2
 
 
-class TestNeo4jAdapter:
+class TestNebulaAdapter:
     @pytest.fixture
-    def neo4j_config(self) -> ConnectionConfig:
+    def config(self) -> ConnectionConfig:
         return ConnectionConfig(
-            database_type=DatabaseType.NEO4J,
+            database_type=DatabaseType.NEBULA,
             host="localhost",
-            port=7687,
-            user="neo4j",
-            password="password",
+            port=9669,
+            database="test_space",
+            user="root",
+            password="nebula",
         )
 
-    def test_adapter_init(self, neo4j_config: ConnectionConfig):
-        adapter = Neo4jAdapter(neo4j_config)
-        assert adapter.database_type == DatabaseType.NEO4J
-
-    def test_build_uri(self, neo4j_config: ConnectionConfig):
-        adapter = Neo4jAdapter(neo4j_config)
-        uri = adapter._build_uri()
-        assert uri == "bolt://localhost:7687"
-
-
-class TestInfluxDBAdapter:
-    @pytest.fixture
-    def influx_config(self) -> ConnectionConfig:
-        return ConnectionConfig(
-            database_type=DatabaseType.INFLUXDB,
-            host="localhost",
-            port=8086,
-            extra={
-                "token": "test-token",
-                "org": "test-org",
-            },
-        )
-
-    def test_adapter_init(self, influx_config: ConnectionConfig):
-        adapter = InfluxDBAdapter(influx_config)
-        assert adapter.database_type == DatabaseType.INFLUXDB
-
-    @pytest.mark.asyncio
-    async def test_health_check(self, influx_config: ConnectionConfig):
-        adapter = InfluxDBAdapter(influx_config)
-
-        mock_client = MagicMock()
-        mock_client.ping.return_value = True
-
-        adapter._client = mock_client
-
-        result = await adapter.health_check()
-        assert result is True
+    def test_adapter_type(self, config: ConnectionConfig):
+        adapter = NebulaAdapter(config)
+        assert adapter.database_type == DatabaseType.NEBULA

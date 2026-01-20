@@ -10,8 +10,10 @@ from agent_db.adapters.protocol import (
     DatabaseType,
     QueryResult,
 )
+from agent_db.adapters.factory import register_adapter
 
 
+@register_adapter(DatabaseType.NEO4J)
 class Neo4jAdapter(DatabaseAdapter):
     """Adapter for Neo4j graph database."""
 
@@ -25,16 +27,24 @@ class Neo4jAdapter(DatabaseAdapter):
 
     def _build_uri(self) -> str:
         """Build connection URI."""
-        port = self.config.port or 7687
-        return f"bolt://{self.config.host}:{port}"
+        scheme = "bolt+s" if self.config.ssl.enabled else "bolt"
+        return f"{scheme}://{self.config.host}:{self.config.effective_port}"
 
     async def connect(self) -> None:
         """Connect to Neo4j."""
         uri = self._build_uri()
         auth = None
-        if self.config.user and self.config.password:
-            auth = (self.config.user, self.config.password)
-        self._driver = GraphDatabase.driver(uri, auth=auth, **self.config.extra)
+        if self.config.user and self.config.get_password():
+            auth = (self.config.user, self.config.get_password())
+
+        self._driver = GraphDatabase.driver(
+            uri,
+            auth=auth,
+            max_connection_pool_size=self.config.pool.max_size,
+            connection_timeout=self.config.pool.connect_timeout,
+            max_connection_lifetime=self.config.pool.max_idle_time,
+            **self.config.extra,
+        )
 
     async def disconnect(self) -> None:
         """Disconnect from Neo4j."""

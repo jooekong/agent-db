@@ -2,30 +2,79 @@
 
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 
 class DatabaseType(str, Enum):
     """Supported database types."""
 
     POSTGRESQL = "postgresql"
+    MYSQL = "mysql"
     QDRANT = "qdrant"
+    MILVUS = "milvus"
     NEO4J = "neo4j"
+    NEBULA = "nebula"
     INFLUXDB = "influxdb"
+
+
+class SSLConfig(BaseModel):
+    """SSL/TLS configuration."""
+
+    enabled: bool = False
+    ca_cert: Optional[str] = None
+    client_cert: Optional[str] = None
+    client_key: Optional[str] = None
+    verify: bool = True
+
+
+class PoolConfig(BaseModel):
+    """Connection pool configuration."""
+
+    min_size: int = 1
+    max_size: int = 10
+    max_idle_time: int = 300  # seconds
+    connect_timeout: int = 10  # seconds
+    command_timeout: Optional[int] = None  # seconds
 
 
 class ConnectionConfig(BaseModel):
     """Database connection configuration."""
 
     database_type: DatabaseType
+    name: str = "default"  # Logical name for this connection
     host: str = "localhost"
     port: Optional[int] = None
     database: Optional[str] = None
     user: Optional[str] = None
-    password: Optional[str] = None
+    password: Optional[SecretStr] = None
+    ssl: SSLConfig = Field(default_factory=SSLConfig)
+    pool: PoolConfig = Field(default_factory=PoolConfig)
     extra: dict[str, Any] = Field(default_factory=dict)
+
+    def get_password(self) -> Optional[str]:
+        """Get password as plain string."""
+        return self.password.get_secret_value() if self.password else None
+
+    @property
+    def default_port(self) -> int:
+        """Get default port for database type."""
+        ports = {
+            DatabaseType.POSTGRESQL: 5432,
+            DatabaseType.MYSQL: 3306,
+            DatabaseType.QDRANT: 6333,
+            DatabaseType.MILVUS: 19530,
+            DatabaseType.NEO4J: 7687,
+            DatabaseType.NEBULA: 9669,
+            DatabaseType.INFLUXDB: 8086,
+        }
+        return ports.get(self.database_type, 0)
+
+    @property
+    def effective_port(self) -> int:
+        """Get port with fallback to default."""
+        return self.port or self.default_port
 
 
 class QueryResult(BaseModel):
