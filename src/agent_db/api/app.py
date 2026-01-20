@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 
 from agent_db.api.routes import router
+from agent_db.api.profiling_routes import router as profiling_router
 
 
 def create_app() -> FastAPI:
@@ -14,5 +15,6 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(router)
+    app.include_router(profiling_router)
 
     return app

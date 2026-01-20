@@ -22,6 +22,32 @@ entities:
           - value: pro
             meaning: "Paid user with full access"
             business_priority: high
+    identity:
+      canonical_id: user_id
+      sources:
+        - database: postgresql
+          entity: user
+          key_column: id
+          field_map:
+            email: email
+            name: name
+        - database: qdrant
+          collection: user_behavior_vectors
+          key_column: user_id
+          field_map:
+            email: user_email
+      match_rules:
+        - name: email_match
+          strategy: exact
+          fields:
+            - email
+          confidence: 0.95
+        - name: name_fuzzy
+          strategy: fuzzy
+          fields:
+            - name
+          threshold: 0.85
+          confidence: 0.8
 
 cross_database_mappings:
   - name: user_unified_view

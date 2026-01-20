@@ -476,6 +476,30 @@ entities:
           - value: pro
             meaning: "Paid user with full access"
             business_priority: high
+    identity:
+      canonical_id: user_id
+      sources:
+        - database: postgresql
+          entity: user
+          key_column: id
+          field_map:
+            email: email
+            full_name: name
+        - database: qdrant
+          collection: user_behavior_vectors
+          key_column: user_id
+          field_map:
+            email: payload.email
+            full_name: payload.name
+      match_rules:
+        - name: exact_email
+          strategy: exact
+          fields: [email]
+          confidence: 0.99
+        - name: fuzzy_name
+          strategy: fuzzy
+          fields: [full_name]
+          threshold: 0.85
 
 cross_database_mappings:
   - name: user_unified_view
@@ -532,6 +556,9 @@ class TestSchemaLoader:
         assert user.lifecycle.created == "created_at"
         assert len(user.states) == 2
         assert len(user.attributes) == 1
+        assert user.identity is not None
+        assert user.identity.canonical_id == "user_id"
+        assert len(user.identity.sources) == 2
 
     def test_load_cross_database_mappings(self, sample_schema_path: Path):
         loader = SchemaLoader()
@@ -675,6 +702,34 @@ __all__ = [
 pytest tests/semantic/test_loader.py -v
 git add .
 git commit -m "feat(semantic): add YAML schema loader"
+```
+
+---
+
+### Identity Mapping Addendum (Hybrid Join)
+
+**Purpose:** Enable cross-database joins even when sources do not share IDs.
+
+**Identity mapping spec (stored in mapping table):**
+- `canonical_id`
+- `source` (database name)
+- `source_key` (record key in that source)
+- `match_rule` (rule name)
+- `confidence`
+- `updated_at`
+- `version`
+
+**Hybrid flow:**
+- Offline resolution builds/refreshes mappings using deterministic then probabilistic rules.
+- Query-time resolution uses mapping table to translate IDs; unresolved keys fall back to source-local canonical IDs.
+
+```mermaid
+graph TD
+    userIntent[UserIntent] --> resolveIdentity[ResolveIdentity]
+    resolveIdentity --> queryPrimary[QueryPrimary]
+    resolveIdentity --> querySecondary[QuerySecondary]
+    queryPrimary --> fuseResults[FuseResults]
+    querySecondary --> fuseResults
 ```
 
 ---

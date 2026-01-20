@@ -25,6 +25,13 @@ class AttributeSemanticType(str, Enum):
     TEXT = "text"
 
 
+class MatchStrategy(str, Enum):
+    """Identity match strategy."""
+
+    EXACT = "exact"
+    FUZZY = "fuzzy"
+
+
 class Lifecycle(BaseModel):
     """Entity lifecycle column mappings."""
 
@@ -57,6 +64,36 @@ class Attribute(BaseModel):
     enum_values: list[EnumValue] = Field(default_factory=list)
 
 
+class IdentityMatchRule(BaseModel):
+    """Rule for matching entities across sources."""
+
+    name: str
+    strategy: MatchStrategy = MatchStrategy.EXACT
+    fields: list[str]
+    threshold: Optional[float] = None
+    confidence: Optional[float] = None
+
+
+class IdentitySource(BaseModel):
+    """Source-specific identity configuration."""
+
+    database: str
+    entity: Optional[str] = None
+    collection: Optional[str] = None
+    node: Optional[str] = None
+    measurement: Optional[str] = None
+    key_column: str
+    field_map: dict[str, str] = Field(default_factory=dict)
+
+
+class EntityIdentity(BaseModel):
+    """Identity definition for cross-database linking."""
+
+    canonical_id: str
+    sources: list[IdentitySource]
+    match_rules: list[IdentityMatchRule] = Field(default_factory=list)
+
+
 class Entity(BaseModel):
     """Table-level semantic definition."""
 
@@ -67,6 +104,7 @@ class Entity(BaseModel):
     lifecycle: Optional[Lifecycle] = None
     states: list[EntityState] = Field(default_factory=list)
     attributes: list[Attribute] = Field(default_factory=list)
+    identity: Optional[EntityIdentity] = None
 
 
 class DatabaseRole(str, Enum):

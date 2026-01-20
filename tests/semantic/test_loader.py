@@ -64,3 +64,16 @@ entities:
         schema = loader.load_from_string(yaml_content)
         assert len(schema.entities) == 1
         assert schema.entities[0].name == "order"
+
+    def test_load_entity_identity(self, sample_schema_path: Path):
+        loader = SchemaLoader()
+        schema = loader.load(sample_schema_path)
+
+        user = schema.entities[0]
+        assert user.identity is not None
+        assert user.identity.canonical_id == "user_id"
+        assert len(user.identity.sources) == 2
+        assert user.identity.sources[0].database == "postgresql"
+        assert user.identity.sources[0].key_column == "id"
+        assert len(user.identity.match_rules) == 2
+        assert user.identity.match_rules[0].name == "email_match"
